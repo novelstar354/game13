@@ -2,221 +2,176 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>YACHT DICE ULTIMATE</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ヨット完全版</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <link rel="icon" href="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ2hfa6mn-kAuE5rhjik7bwe6PzZ8oXsfc0Jy-2v19_MN24r8jwd9kUFdXP&s=10" sizes="16×16" type="image/png" />  
 <style>
-body{background:#111;color:#fff;font-family:sans-serif;text-align:center;margin:0}
+body{margin:0;background:#111;color:#fff;font-family:sans-serif;text-align:center}
 h1{margin:10px}
-#dice{display:flex;justify-content:center;gap:10px;margin:10px}
-.die{width:60px;height:60px;background:#fff;color:#000;font-size:32px;line-height:60px;border-radius:10px;cursor:pointer}
-.lock{background:gold}
-.flash{animation:flash .5s}
-@keyframes flash{0%{background:#fff}50%{background:gold}100%{background:#fff}}
-button{padding:8px 14px;margin:4px;font-size:14px}
-table{margin:auto;border-collapse:collapse}
-td,th{border:1px solid #777;padding:5px}
-.used{background:#444;color:#888}
-.active{background:#264}
-select{font-size:14px}
+button{padding:10px 14px;margin:5px;font-size:16px;border-radius:8px;border:none}
+select{font-size:16px;padding:6px}
+#game,#result{display:none}
+.dice{display:flex;justify-content:center;gap:10px;margin:10px}
+.die{width:60px;height:60px;background:white;color:black;font-size:32px;
+display:flex;align-items:center;justify-content:center;border-radius:10px;transition:.2s}
+.die.hold{background:gold}
+table{width:100%;border-collapse:collapse}
+td,th{border:1px solid #555;padding:6px}
+.used{background:#333;color:#888}
+.turn{color:#6cf;font-size:18px;margin:5px}
+#result h2{color:gold;font-size:28px}
+.rank{font-size:18px}
 </style>
 </head>
 <body>
 
-<h1>🎲 YACHT DICE ULTIMATE</h1>
+<h1>🎲 ヨット完全版</h1>
 
-人数:
-<select id="playerCount" onchange="setup()">
-<option value="2">2人</option>
-<option value="3">3人</option>
-<option value="4">4人</option>
-</select>
+<div id="setup">
+  プレイヤー数:
+  <select id="pnum"><option>2</option><option>3</option><option>4</option></select><br><br>
+  CPU人数:
+  <select id="cpu"><option>0</option><option>1</option><option>2</option><option>3</option></select><br><br>
+  CPU強さ:
+  <select id="level">
+    <option value="easy">Easy</option>
+    <option value="normal">Normal</option>
+    <option value="hard">Hard</option>
+    <option value="lunatic">Lunatic</option>
+  </select><br><br>
+  <button onclick="startGame()">▶ スタート</button>
+</div>
 
-<div id="playerSettings"></div>
+<div id="game">
+  <div class="turn" id="turnText"></div>
+  <div class="dice" id="dice"></div>
+  <button onclick="rollDice()">🎲 振る</button>
+  残り <span id="rolls">3</span><br>
+  <table id="score"></table><br>
+  <button onclick="toggleSound()">🔊 音 <span id="soundState">ON</span></button>
+  <button onclick="saveGame()">💾 セーブ</button>
+  <button onclick="loadGame()">📂 ロード</button>
+</div>
 
-<div id="dice"></div>
-<button onclick="roll()">ROLL</button>
-<p>残りロール: <span id="rolls">3</span></p>
-
-<table id="table"></table>
-
-<br>
-<button onclick="saveGame()">💾 セーブ</button>
-<button onclick="loadGame()">📂 ロード</button>
-<button onclick="deleteSave()">🗑 削除</button>
+<div id="result">
+  <h2>🏆 勝利！</h2>
+  <div id="winner"></div>
+  <div id="ranking"></div><br>
+  <button onclick="location.reload()">🔁 もう一度</button>
+</div>
 
 <script>
-const roles=["1","2","3","4","5","6","スリー","フォー","フル","Sスト","Lスト","ヨット","チョイス"];
-let players=[],turn=0,rolls=3;
+let players=[],current=0,rolls=3;
 let dice=[1,1,1,1,1],hold=[false,false,false,false,false];
+let soundOn=true;
+const cats=["1","2","3","4","5","6","チョイス","フォー","フル","Sスト","Lスト","ヨット"];
 
-function setup(){
- const n=+document.getElementById("playerCount").value;
- players=[];
- for(let i=0;i<n;i++){
-  players.push({type:"human",ai:"easy",used:{},score:{},yacht:0});
- }
- renderPlayerSettings();
- buildTable();
- initDice();
-}
+function sound(f){if(!soundOn)return;let a=new AudioContext(),o=a.createOscillator();o.frequency.value=f;o.connect(a.destination);o.start();o.stop(a.currentTime+.1);}
 
-function renderPlayerSettings(){
- let html="";
- players.forEach((p,i)=>{
-  html+=`P${i+1}: 
-  <select onchange="setType(${i},this.value)">
-    <option value="human">人間</option>
-    <option value="cpu">CPU</option>
-  </select>
-  <select onchange="setAI(${i},this.value)">
-    <option>easy</option><option>normal</option>
-    <option>hard</option><option>lunatic</option>
-  </select><br>`;
- });
- document.getElementById("playerSettings").innerHTML=html;
-}
-
-function setType(i,v){players[i].type=v}
-function setAI(i,v){players[i].ai=v}
-
-function buildTable(){
- let t=document.getElementById("table");
- t.innerHTML="";
- let h="<tr><th>役</th>";
- players.forEach((_,i)=>h+=`<th>P${i+1}</th>`);
- h+="</tr>";
- t.innerHTML+=h;
-
- roles.forEach(r=>{
-  let row=`<tr><td>${r}</td>`;
-  players.forEach((_,i)=>row+=`<td id="p${i}_${r}">-</td>`);
-  row+="</tr>";
-  t.innerHTML+=row;
- });
-
- let b="<tr><td>ボーナス</td>";
- players.forEach((_,i)=>b+=`<td id="b${i}">0</td>`);
- b+="</tr>";
- t.innerHTML+=b;
-
- let t2="<tr><td>合計</td>";
- players.forEach((_,i)=>t2+=`<td id="t${i}">0</td>`);
- t2+="</tr>";
- t.innerHTML+=t2;
-}
-
-function initDice(){
- const d=document.getElementById("dice");
- d.innerHTML="";
- for(let i=0;i<5;i++){
-  let e=document.createElement("div");
-  e.className="die";
-  e.onclick=()=>toggle(i);
-  d.appendChild(e);
- }
- draw();
-}
-
-function roll(){
- if(rolls<=0) return;
- for(let i=0;i<5;i++) if(!hold[i]) dice[i]=Math.floor(Math.random()*6)+1;
- rolls--;
- draw();
- if(players[turn].type==="cpu") setTimeout(cpuPlay,500);
-}
-
-function toggle(i){ if(players[turn].type==="human"){ hold[i]=!hold[i]; draw(); } }
-
-function draw(){
- document.querySelectorAll(".die").forEach((d,i)=>{
-  d.textContent=dice[i];
-  d.className="die"+(hold[i]?" lock":"");
- });
- document.getElementById("rolls").textContent=rolls;
- highlight();
-}
-
-function highlight(){
- document.querySelectorAll("td").forEach(e=>e.classList.remove("active"));
- document.querySelectorAll(`#table tr td:nth-child(${turn+2})`).forEach(e=>e.classList.add("active"));
-}
-
-function score(role){
- if(players[turn].used[role]) return;
- let cnt={}; dice.forEach(d=>cnt[d]=(cnt[d]||0)+1);
- let s=0;
-
- if("123456".includes(role)) s=dice.filter(d=>d==role).reduce((a,b)=>a+b,0);
- else if(role==="スリー") s=Object.values(cnt).some(v=>v>=3)?sum():0;
- else if(role==="フォー") s=Object.values(cnt).some(v=>v>=4)?sum():0;
- else if(role==="フル") s=Object.values(cnt).sort().join()=="2,3"?25:0;
- else if(role==="Sスト") s=["1234","2345","3456"].some(v=>v.split("").every(n=>dice.includes(+n)))?30:0;
- else if(role==="Lスト") s=["12345","23456"].some(v=>v.split("").every(n=>dice.includes(+n)))?40:0;
- else if(role==="ヨット"){
-   if(Object.values(cnt).some(v=>v==5)){
-    players[turn].yacht++;
-    s=players[turn].yacht==1?50:100;
-    document.body.classList.add("flash");
-    setTimeout(()=>document.body.classList.remove("flash"),400);
-   }
- }
- else if(role==="チョイス") s=sum();
-
- players[turn].used[role]=true;
- players[turn].score[role]=s;
- document.getElementById(`p${turn}_${role}`).textContent=s;
-
- nextTurn();
+function startGame(){
+  const p=+pnum.value,c=+cpu.value,l=level.value;
+  players=[];
+  for(let i=0;i<p;i++)
+    players.push({name:i<p-c?`Player${i+1}`:`CPU${i+1}`,cpu:i>=p-c,level:l,score:{}});
+  setup.style.display="none";
+  game.style.display="block";
+  nextTurn();
 }
 
 function nextTurn(){
- rolls=3;
- hold=[false,false,false,false,false];
- turn=(turn+1)%players.length;
- updateTotal();
- draw();
- if(players[turn].type==="cpu") setTimeout(cpuPlay,700);
+  if(players.every(p=>Object.keys(p.score).length===cats.length)) return showResult();
+  rolls=3; hold=[false,false,false,false,false];
+  updateDice();
+  turnText.textContent=players[current].name+" のターン";
+  updateTable();
+  if(players[current].cpu) setTimeout(cpuPlay,500);
 }
 
-function sum(){return dice.reduce((a,b)=>a+b,0)}
+function rollDice(){
+  if(rolls<=0) return;
+  dice=dice.map((v,i)=>hold[i]?v:Math.floor(Math.random()*6)+1);
+  rolls--; sound(500); updateDice();
+}
 
-function updateTotal(){
- players.forEach((p,i)=>{
-  let up=0;
-  for(let n=1;n<=6;n++) up+=p.score[n]||0;
-  let bonus=up>=63?35:0;
-  document.getElementById("b"+i).textContent=bonus;
-  let total=Object.values(p.score).reduce((a,b)=>a+b,0)+bonus;
-  document.getElementById("t"+i).textContent=total;
- });
+function updateDice(){
+  dice.forEach((v,i)=>{
+    const d=document.getElementById("dice");
+    d.innerHTML="";
+    dice.forEach((v,i)=>{
+      const e=document.createElement("div");
+      e.className="die"+(hold[i]?" hold":"");
+      e.textContent=v;
+      e.onclick=()=>{hold[i]=!hold[i];updateDice();}
+      d.appendChild(e);
+    });
+  });
+  rollsElem.textContent=rolls;
+}
+const rollsElem=document.getElementById("rolls");
+
+function calc(cat){
+  const c=[0,0,0,0,0,0]; dice.forEach(v=>c[v-1]++);
+  const sum=dice.reduce((a,b)=>a+b,0);
+  if("123456".includes(cat)) return c[cat-1]*cat;
+  if(cat=="チョイス") return sum;
+  if(cat=="フォー") return c.some(v=>v>=4)?sum:0;
+  if(cat=="フル") return c.includes(3)&&c.includes(2)?25:0;
+  if(cat=="Sスト") return ["1234","2345","3456"].some(s=>s.split("").every(n=>c[n-1]));
+  if(cat=="Lスト") return ["12345","23456"].some(s=>s.split("").every(n=>c[n-1]));
+  if(cat=="ヨット") return c.includes(5)?50:0;
+  return 0;
+}
+
+function choose(cat){
+  players[current].score[cat]=calc(cat);
+  current=(current+1)%players.length;
+  nextTurn();
+}
+
+function updateTable(){
+  score.innerHTML="<tr><th>役</th>"+players.map(p=>`<th>${p.name}</th>`).join("")+"</tr>";
+  cats.forEach(c=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${c}</td>`;
+    players.forEach((p,i)=>{
+      const td=document.createElement("td");
+      if(p.score[c]!=null){td.textContent=p.score[c];td.className="used";}
+      else if(i===current){td.textContent="選択";td.onclick=()=>choose(c);}
+      tr.appendChild(td);
+    });
+    score.appendChild(tr);
+  });
 }
 
 function cpuPlay(){
- let ai=players[turn].ai;
- if(ai==="easy"){ roll(); score("チョイス"); return; }
- roll(); roll(); roll();
- const order=["ヨット","Lスト","Sスト","フォー","フル","スリー","チョイス"];
- for(let r of order) if(!players[turn].used[r]){ score(r); return; }
+  const lv=players[current].level;
+  if(lv==="easy"){rollDice();return choose(randCat());}
+  if(lv==="normal"){rollDice();if(Math.random()<0.5) holdBest();return choose(bestCat());}
+  if(lv==="hard"){for(let i=0;i<2;i++){rollDice();holdBest();}return choose(bestCat());}
+  if(lv==="lunatic"){for(let i=0;i<3;i++){rollDice();smartHold();}return choose(bestCat());}
 }
 
-function saveGame(){
- localStorage.setItem("yacht_save",JSON.stringify(players));
- alert("保存しました");
-}
-function loadGame(){
- let d=localStorage.getItem("yacht_save");
- if(!d) return alert("データなし");
- players=JSON.parse(d);
- buildTable();
- updateTotal();
-}
-function deleteSave(){
- localStorage.removeItem("yacht_save");
- alert("削除しました");
+function randCat(){return cats.filter(c=>!players[current].score[c])[Math.floor(Math.random()*10)];}
+function bestCat(){let b=null,m=-1;cats.forEach(c=>{if(players[current].score[c]==null){let v=calc(c);if(v>m){m=v;b=c;}}});return b;}
+function holdBest(){let cnt=[0,0,0,0,0,0];dice.forEach(v=>cnt[v-1]++);let m=cnt.indexOf(Math.max(...cnt))+1;dice.forEach((v,i)=>hold[i]=v===m);}
+function smartHold(){let cnt=[0,0,0,0,0,0];dice.forEach(v=>cnt[v-1]++);let s=cnt.map((v,i)=>({v,i})).sort((a,b)=>b.v-a.v);dice.forEach((v,i)=>hold[i]=(v===s[0].i+1||v===s[1].i+1));}
+
+function showResult(){
+  game.style.display="none";
+  result.style.display="block";
+  let rank=[...players].map(p=>({name:p.name,score:Object.values(p.score).reduce((a,b)=>a+b,0)}));
+  rank.sort((a,b)=>b.score-a.score);
+  winner.textContent=`👑 勝者: ${rank[0].name} (${rank[0].score}点)`;
+  ranking.innerHTML=rank.map((p,i)=>`${i+1}位: ${p.name} ${p.score}点`).join("<br>");
+  sound(800);
 }
 
-setup();
+function toggleSound(){
+  soundOn=!soundOn;
+  soundState.textContent=soundOn?"ON":"OFF";
+}
+function saveGame(){localStorage.setItem("yacht_save",JSON.stringify({players,current}));alert("保存しました");}
+function loadGame(){let d=JSON.parse(localStorage.getItem("yacht_save"));if(!d)return;players=d.players;current=d.current;setup.style.display="none";game.style.display="block";nextTurn();}
 </script>
 </body>
 </html>
