@@ -2,23 +2,19 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>YACHT DICE</title>
+<title>YACHT DICE FULL</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
  <link rel="icon" href="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQY-7LsLHb46Jk3A3IwL_IlpwosDqtVjUC79-vYQ7SMzQ&s=10" sizes="16×16" type="image/png" />  
 <style>
-body {
-  margin:0; background:#222; color:#fff; font-family:sans-serif;
-  display:flex; justify-content:center;
-}
-#game { max-width:420px; width:100%; padding:10px; }
-button { padding:8px 12px; margin:4px; font-size:16px; }
-.dice { font-size:40px; margin:5px; cursor:pointer; }
-.hold { opacity:0.4; }
-table { width:100%; border-collapse:collapse; }
-td,th { border:1px solid #555; padding:4px; text-align:center; }
-.active { background:#0a0; }
-.win { animation: flash 0.5s infinite alternate; }
-@keyframes flash { from{background:#ff0;} to{background:#f00;} }
+body{margin:0;background:#222;color:#fff;font-family:sans-serif;display:flex;justify-content:center;}
+#game{max-width:420px;width:100%;padding:10px;}
+button{padding:6px 10px;margin:4px;font-size:15px;}
+.dice{font-size:38px;margin:4px;cursor:pointer;}
+.hold{opacity:.4;}
+table{border-collapse:collapse;margin:6px 0;}
+td,th{border:1px solid #555;padding:4px;text-align:center;font-size:13px;}
+.active{background:#0a0;}
+.scoreWrap{overflow-x:auto;}
    footer {
            padding: 30px;
            text-align: center;
@@ -38,65 +34,68 @@ td,th { border:1px solid #555; padding:4px; text-align:center; }
 <div id="setup">
 人数:
 <select id="players">
-<option value="1">1人</option>
-<option value="2">2人</option>
-<option value="3">3人</option>
-<option value="4">4人</option>
-</select><br>
+<option value="1">1</option>
+<option value="2">2</option>
+<option value="3">3</option>
+<option value="4">4</option>
+</select>
 
-CPU数:
+CPU:
 <select id="cpu">
 <option value="0">0</option>
 <option value="1">1</option>
 <option value="2">2</option>
 <option value="3">3</option>
-</select><br>
+</select>
 
-CPU強さ:
+難易度:
 <select id="cpuLevel">
 <option value="easy">Easy</option>
 <option value="normal">Normal</option>
 <option value="hard">Hard</option>
 <option value="lunatic">Lunatic</option>
-</select><br><br>
+</select>
 
+<br><br>
 <button onclick="startGame()">START</button>
 </div>
 
-<div id="play" style="display:none;">
+<div id="play" style="display:none">
 <h3 id="turn"></h3>
 
 <div id="diceArea"></div>
 <button onclick="roll()">ROLL</button>
 
-<table id="score"></table>
+<div>
+<button onclick="saveGame()">💾 セーブ</button>
+<button onclick="loadGame()">📂 ロード</button>
+<button onclick="deleteSave()">🗑 削除</button>
+</div>
 
-<button onclick="toggleSound()">🔊 音</button>
+<div class="scoreWrap" id="scoreAll"></div>
 </div>
 
 </div>
-
    <footer>
-       © 2025 GAMEHUB - All Rights Reserved.
+       © 2025 STAR CORPORATION - All Rights Reserved.
    </footer>
-
 
 <script>
 let dice=[], hold=[], rolls=3;
 let players=[], current=0;
-let sound=true;
 
 const cats=["1","2","3","4","5","6","3D","4D","FH","SS","LS","Y","C"];
 
-function randDice(){ return Math.floor(Math.random()*6)+1; }
+function rand(){return Math.floor(Math.random()*6)+1;}
 
 function startGame(){
-  const p=+playersEl.value, c=+cpu.value;
-  const lvl=document.getElementById("cpuLevel").value;
+  const p=+playersEl.value;
+  const c=+cpu.value;
+  const lvl=cpuLevel.value;
   players=[];
   for(let i=0;i<p;i++){
     players.push({
-      name: i<p-c?`P${i+1}`:`CPU${i+1}`,
+      name:i<p-c?`P${i+1}`:`CPU${i+1}`,
       cpu:i>=p-c,
       level:lvl,
       score:{},
@@ -110,22 +109,22 @@ function startGame(){
 
 function nextTurn(){
   rolls=3;
-  dice=Array.from({length:5},randDice);
+  dice=Array.from({length:5},rand);
   hold=[false,false,false,false,false];
-  render();
+  draw();
   if(players[current].cpu) setTimeout(cpuPlay,600);
 }
 
 function roll(){
-  if(rolls<=0) return;
-  dice=dice.map((v,i)=>hold[i]?v:randDice());
+  if(rolls<=0)return;
+  dice=dice.map((v,i)=>hold[i]?v:rand());
   rolls--;
-  render();
+  draw();
 }
 
-function render(){
+function draw(){
   document.getElementById("turn").textContent=
-    players[current].name+" の番 (残り:"+rolls+")";
+    players[current].name+" の番（残り"+rolls+"）";
 
   const d=document.getElementById("diceArea");
   d.innerHTML="";
@@ -133,7 +132,7 @@ function render(){
     const s=document.createElement("span");
     s.textContent=v;
     s.className="dice"+(hold[i]?" hold":"");
-    s.onclick=()=>{hold[i]=!hold[i]; render();}
+    s.onclick=()=>{hold[i]=!hold[i];draw();}
     d.appendChild(s);
   });
 
@@ -141,23 +140,28 @@ function render(){
 }
 
 function drawScore(){
-  const t=document.getElementById("score");
-  t.innerHTML="<tr><th>役</th><th>点</th></tr>";
-  cats.forEach(c=>{
-    const tr=document.createElement("tr");
-    const td1=document.createElement("td");
-    td1.textContent=c;
-    const td2=document.createElement("td");
-    td2.textContent=players[current].score[c]??"";
-    td2.onclick=()=>choose(c);
-    tr.append(td1,td2);
-    t.appendChild(tr);
+  const wrap=document.getElementById("scoreAll");
+  wrap.innerHTML="";
+  players.forEach((p,i)=>{
+    let t="<table"+(i===current?' class="active"':'')+">";
+    t+=`<tr><th colspan="2">${p.name}</th></tr>`;
+    cats.forEach(c=>{
+      t+=`<tr><td>${c}</td><td>${p.score[c]??""}</td></tr>`;
+    });
+    let upper=["1","2","3","4","5","6"].reduce((s,k)=>s+(p.score[k]||0),0);
+    t+=`<tr><td>上段</td><td>${upper}</td></tr>`;
+    t+=`<tr><td>ボーナス</td><td>${upper>=63?35:0}</td></tr>`;
+    let total=Object.values(p.score).reduce((a,b)=>a+(b||0),0)+(upper>=63?35:0);
+    t+=`<tr><th>合計</th><th>${total}</th></tr>`;
+    t+="</table>";
+    wrap.innerHTML+=t;
   });
 }
 
 function choose(c){
-  if(players[current].score[c]!=null) return;
+  if(players[current].score[c]!=null)return;
   players[current].score[c]=calc(c);
+  saveGame();
   current=(current+1)%players.length;
   nextTurn();
 }
@@ -184,35 +188,57 @@ function calc(c){
 }
 
 function cpuPlay(){
-  const lv=players[current].level;
-  if(lv==="easy"){ roll(); setTimeout(()=>choose(randCat()),400); }
-  else if(lv==="normal"){ roll(); roll(); setTimeout(()=>choose(bestCat()),500); }
-  else if(lv==="hard"){ roll(); roll(); roll(); setTimeout(()=>choose(bestCat()),600); }
-  else{
-    roll(); roll(); roll();
-    setTimeout(()=>choose(bestCat()),700);
-  }
+  const l=players[current].level;
+  if(l==="easy"){ roll(); setTimeout(()=>choose(randCat()),400); }
+  else if(l==="normal"){ roll(); roll(); setTimeout(()=>choose(bestCat()),500); }
+  else{ roll(); roll(); roll(); setTimeout(()=>choose(bestCat()),600); }
 }
 
 function bestCat(){
-  let best=null,max=-1;
+  let b=null,m=-1;
   cats.forEach(c=>{
     if(players[current].score[c]==null){
       let v=calc(c);
-      if(v>max){max=v;best=c;}
+      if(v>m){m=v;b=c;}
     }
   });
-  return best;
+  return b;
 }
 
 function randCat(){
-  return cats.filter(c=>players[current].score[c]==null)
-             [Math.floor(Math.random()*cats.length)];
+  const a=cats.filter(c=>players[current].score[c]==null);
+  return a[Math.floor(Math.random()*a.length)];
 }
 
-function toggleSound(){ sound=!sound; }
+/* ===== セーブ関連 ===== */
+function saveGame(){
+  localStorage.setItem("yachtSave",JSON.stringify({
+    players,current,dice,hold,rolls
+  }));
+}
 
-const playersEl=document.getElementById("players");
+function loadGame(){
+  const d=localStorage.getItem("yachtSave");
+  if(!d){alert("セーブがありません");return;}
+  const s=JSON.parse(d);
+  players=s.players; current=s.current;
+  dice=s.dice; hold=s.hold; rolls=s.rolls;
+  document.getElementById("setup").style.display="none";
+  document.getElementById("play").style.display="block";
+  draw();
+}
+
+function deleteSave(){
+  if(!localStorage.getItem("yachtSave")){
+    alert("セーブがありません");
+    return;
+  }
+  if(confirm("セーブデータを削除しますか？")){
+    localStorage.removeItem("yachtSave");
+    alert("削除しました");
+    location.reload();
+  }
+}
 </script>
 </body>
 </html>
