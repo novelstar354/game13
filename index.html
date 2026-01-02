@@ -2,162 +2,221 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>YACHT DICE</title>
+<title>YACHT DICE ULTIMATE</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <link rel="icon" href="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ2hfa6mn-kAuE5rhjik7bwe6PzZ8oXsfc0Jy-2v19_MN24r8jwd9kUFdXP&s=10" sizes="16×16" type="image/png" />  
 <style>
-body{margin:0;font-family:sans-serif;background:#222;color:#fff;text-align:center}
-button,select{font-size:16px;padding:6px;margin:4px}
-#dice{margin:10px}
-
-.dice{
-  font-size:42px;
-  margin:6px;
-  display:inline-block;
-  cursor:pointer;
-  transition:.3s;
-}
-.dice.roll{animation:roll .4s}
-.dice.hold{color:gold;transform:translateY(-10px) scale(1.1);text-shadow:0 0 10px gold}
-
-@keyframes roll{
-  0%{transform:rotate(0)}
-  50%{transform:rotate(180deg) scale(1.3)}
-  100%{transform:rotate(360deg)}
-}
-
+body{background:#111;color:#fff;font-family:sans-serif;text-align:center;margin:0}
+h1{margin:10px}
+#dice{display:flex;justify-content:center;gap:10px;margin:10px}
+.die{width:60px;height:60px;background:#fff;color:#000;font-size:32px;line-height:60px;border-radius:10px;cursor:pointer}
+.lock{background:gold}
+.flash{animation:flash .5s}
+@keyframes flash{0%{background:#fff}50%{background:gold}100%{background:#fff}}
+button{padding:8px 14px;margin:4px;font-size:14px}
 table{margin:auto;border-collapse:collapse}
-td,th{border:1px solid #888;padding:6px}
-
-.scorePop{
-  animation:pop .4s;
-}
-@keyframes pop{
-  0%{transform:scale(0);opacity:0}
-  80%{transform:scale(1.2)}
-  100%{transform:scale(1)}
-}
-
-#effect{
-  position:fixed;
-  inset:0;
-  pointer-events:none;
-  font-size:40px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  animation:flash .8s;
-}
-@keyframes flash{
-  0%{background:rgba(255,215,0,.6)}
-  100%{background:transparent}
-}
+td,th{border:1px solid #777;padding:5px}
+.used{background:#444;color:#888}
+.active{background:#264}
+select{font-size:14px}
 </style>
 </head>
 <body>
 
-<h1>🎲 YACHT DICE</h1>
+<h1>🎲 YACHT DICE ULTIMATE</h1>
 
-<select id="cpuLevel">
-<option value="easy">CPU EASY</option>
-<option value="normal">CPU NORMAL</option>
-<option value="hard">CPU HARD</option>
-<option value="veryhard">CPU VERY HARD</option>
-<option value="lunatic">CPU LUNATIC</option>
+人数:
+<select id="playerCount" onchange="setup()">
+<option value="2">2人</option>
+<option value="3">3人</option>
+<option value="4">4人</option>
 </select>
+
+<div id="playerSettings"></div>
 
 <div id="dice"></div>
 <button onclick="roll()">ROLL</button>
+<p>残りロール: <span id="rolls">3</span></p>
 
-<h3>PLAYER SCORE</h3>
-<table id="scoreTable"></table>
+<table id="table"></table>
 
-<div id="effect"></div>
+<br>
+<button onclick="saveGame()">💾 セーブ</button>
+<button onclick="loadGame()">📂 ロード</button>
+<button onclick="deleteSave()">🗑 削除</button>
 
 <script>
-let dice=[1,1,1,1,1];
-let hold=[0,0,0,0,0];
-let rolls=3;
-let yachtCount=0;
+const roles=["1","2","3","4","5","6","スリー","フォー","フル","Sスト","Lスト","ヨット","チョイス"];
+let players=[],turn=0,rolls=3;
+let dice=[1,1,1,1,1],hold=[false,false,false,false,false];
 
-const cats=["ones","twos","threes","fours","fives","sixes","three","four","full","small","large","choice","yacht"];
-let used={player:{},cpu:{}};
-
-function init(){
-  const t=document.getElementById("scoreTable");
-  t.innerHTML="";
-  cats.forEach(c=>{
-    let r=t.insertRow();
-    r.insertCell().textContent=c;
-    let p=r.insertCell();
-    p.id="p_"+c;
-    p.onclick=()=>selectScore(c);
-  });
+function setup(){
+ const n=+document.getElementById("playerCount").value;
+ players=[];
+ for(let i=0;i<n;i++){
+  players.push({type:"human",ai:"easy",used:{},score:{},yacht:0});
+ }
+ renderPlayerSettings();
+ buildTable();
+ initDice();
 }
-init();
+
+function renderPlayerSettings(){
+ let html="";
+ players.forEach((p,i)=>{
+  html+=`P${i+1}: 
+  <select onchange="setType(${i},this.value)">
+    <option value="human">人間</option>
+    <option value="cpu">CPU</option>
+  </select>
+  <select onchange="setAI(${i},this.value)">
+    <option>easy</option><option>normal</option>
+    <option>hard</option><option>lunatic</option>
+  </select><br>`;
+ });
+ document.getElementById("playerSettings").innerHTML=html;
+}
+
+function setType(i,v){players[i].type=v}
+function setAI(i,v){players[i].ai=v}
+
+function buildTable(){
+ let t=document.getElementById("table");
+ t.innerHTML="";
+ let h="<tr><th>役</th>";
+ players.forEach((_,i)=>h+=`<th>P${i+1}</th>`);
+ h+="</tr>";
+ t.innerHTML+=h;
+
+ roles.forEach(r=>{
+  let row=`<tr><td>${r}</td>`;
+  players.forEach((_,i)=>row+=`<td id="p${i}_${r}">-</td>`);
+  row+="</tr>";
+  t.innerHTML+=row;
+ });
+
+ let b="<tr><td>ボーナス</td>";
+ players.forEach((_,i)=>b+=`<td id="b${i}">0</td>`);
+ b+="</tr>";
+ t.innerHTML+=b;
+
+ let t2="<tr><td>合計</td>";
+ players.forEach((_,i)=>t2+=`<td id="t${i}">0</td>`);
+ t2+="</tr>";
+ t.innerHTML+=t2;
+}
+
+function initDice(){
+ const d=document.getElementById("dice");
+ d.innerHTML="";
+ for(let i=0;i<5;i++){
+  let e=document.createElement("div");
+  e.className="die";
+  e.onclick=()=>toggle(i);
+  d.appendChild(e);
+ }
+ draw();
+}
 
 function roll(){
-  if(rolls<=0)return;
-  rolls--;
-  for(let i=0;i<5;i++){
-    if(!hold[i]) dice[i]=Math.floor(Math.random()*6)+1;
-  }
-  render(true);
+ if(rolls<=0) return;
+ for(let i=0;i<5;i++) if(!hold[i]) dice[i]=Math.floor(Math.random()*6)+1;
+ rolls--;
+ draw();
+ if(players[turn].type==="cpu") setTimeout(cpuPlay,500);
 }
 
-function render(anim){
-  const d=document.getElementById("dice");
-  d.innerHTML="";
-  dice.forEach((v,i)=>{
-    let s=document.createElement("span");
-    s.textContent="🎲"+v;
-    s.className="dice"+(hold[i]?" hold":"")+(anim?" roll":"");
-    s.onclick=()=>{hold[i]=!hold[i];render()};
-    d.appendChild(s);
-  });
+function toggle(i){ if(players[turn].type==="human"){ hold[i]=!hold[i]; draw(); } }
+
+function draw(){
+ document.querySelectorAll(".die").forEach((d,i)=>{
+  d.textContent=dice[i];
+  d.className="die"+(hold[i]?" lock":"");
+ });
+ document.getElementById("rolls").textContent=rolls;
+ highlight();
 }
 
-function scoreCalc(){
-  let c=[1,2,3,4,5,6].map(n=>dice.filter(d=>d===n).length);
-  return {
-    ones:c[0],twos:c[1]*2,threes:c[2]*3,fours:c[3]*4,fives:c[4]*5,sixes:c[5]*6,
-    three:c.some(v=>v>=3)?dice.reduce((a,b)=>a+b,0):0,
-    four:c.some(v=>v>=4)?dice.reduce((a,b)=>a+b,0):0,
-    full:(c.includes(3)&&c.includes(2))?25:0,
-    small:([1,2,3,4].every(n=>dice.includes(n))||[2,3,4,5].every(n=>dice.includes(n))||[3,4,5,6].every(n=>dice.includes(n)))?30:0,
-    large:([1,2,3,4,5].every(n=>dice.includes(n))||[2,3,4,5,6].every(n=>dice.includes(n)))?40:0,
-    choice:dice.reduce((a,b)=>a+b,0),
-    yacht:c.includes(5)?50:0
-  };
+function highlight(){
+ document.querySelectorAll("td").forEach(e=>e.classList.remove("active"));
+ document.querySelectorAll(`#table tr td:nth-child(${turn+2})`).forEach(e=>e.classList.add("active"));
 }
 
-function selectScore(c){
-  if(used.player[c])return;
-  let sc=scoreCalc()[c];
-  if(c==="yacht" && sc===50 && yachtCount>0){
-    sc+=100;
-    showEffect("🎉 YACHT BONUS +100!");
-  }
-  if(c==="yacht" && sc>=50){
-    yachtCount++;
-    showEffect("🚤 YACHT!");
-  }
-  used.player[c]=true;
-  let cell=document.getElementById("p_"+c);
-  cell.textContent=sc;
-  cell.classList.add("scorePop");
-  rolls=3;
-  hold=[0,0,0,0,0];
+function score(role){
+ if(players[turn].used[role]) return;
+ let cnt={}; dice.forEach(d=>cnt[d]=(cnt[d]||0)+1);
+ let s=0;
+
+ if("123456".includes(role)) s=dice.filter(d=>d==role).reduce((a,b)=>a+b,0);
+ else if(role==="スリー") s=Object.values(cnt).some(v=>v>=3)?sum():0;
+ else if(role==="フォー") s=Object.values(cnt).some(v=>v>=4)?sum():0;
+ else if(role==="フル") s=Object.values(cnt).sort().join()=="2,3"?25:0;
+ else if(role==="Sスト") s=["1234","2345","3456"].some(v=>v.split("").every(n=>dice.includes(+n)))?30:0;
+ else if(role==="Lスト") s=["12345","23456"].some(v=>v.split("").every(n=>dice.includes(+n)))?40:0;
+ else if(role==="ヨット"){
+   if(Object.values(cnt).some(v=>v==5)){
+    players[turn].yacht++;
+    s=players[turn].yacht==1?50:100;
+    document.body.classList.add("flash");
+    setTimeout(()=>document.body.classList.remove("flash"),400);
+   }
+ }
+ else if(role==="チョイス") s=sum();
+
+ players[turn].used[role]=true;
+ players[turn].score[role]=s;
+ document.getElementById(`p${turn}_${role}`).textContent=s;
+
+ nextTurn();
 }
 
-function showEffect(txt){
-  const e=document.getElementById("effect");
-  e.textContent=txt;
-  e.style.display="flex";
-  setTimeout(()=>e.style.display="none",800);
+function nextTurn(){
+ rolls=3;
+ hold=[false,false,false,false,false];
+ turn=(turn+1)%players.length;
+ updateTotal();
+ draw();
+ if(players[turn].type==="cpu") setTimeout(cpuPlay,700);
 }
 
-render();
+function sum(){return dice.reduce((a,b)=>a+b,0)}
+
+function updateTotal(){
+ players.forEach((p,i)=>{
+  let up=0;
+  for(let n=1;n<=6;n++) up+=p.score[n]||0;
+  let bonus=up>=63?35:0;
+  document.getElementById("b"+i).textContent=bonus;
+  let total=Object.values(p.score).reduce((a,b)=>a+b,0)+bonus;
+  document.getElementById("t"+i).textContent=total;
+ });
+}
+
+function cpuPlay(){
+ let ai=players[turn].ai;
+ if(ai==="easy"){ roll(); score("チョイス"); return; }
+ roll(); roll(); roll();
+ const order=["ヨット","Lスト","Sスト","フォー","フル","スリー","チョイス"];
+ for(let r of order) if(!players[turn].used[r]){ score(r); return; }
+}
+
+function saveGame(){
+ localStorage.setItem("yacht_save",JSON.stringify(players));
+ alert("保存しました");
+}
+function loadGame(){
+ let d=localStorage.getItem("yacht_save");
+ if(!d) return alert("データなし");
+ players=JSON.parse(d);
+ buildTable();
+ updateTotal();
+}
+function deleteSave(){
+ localStorage.removeItem("yacht_save");
+ alert("削除しました");
+}
+
+setup();
 </script>
-
 </body>
 </html>
